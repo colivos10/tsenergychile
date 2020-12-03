@@ -1,21 +1,9 @@
 import numpy as np
 import pandas as pd
-
 import matplotlib.pyplot as plt
-#%matplotlib inline
-from sklearn.preprocessing import MinMaxScaler
-import math
 from keras.models import Sequential
 from keras.layers import Dense
-from keras.layers import LSTM
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_squared_error
-from sklearn.metrics import mean_absolute_error
-
-from IPython.display import SVG
-from keras.utils.vis_utils import model_to_dot
-
-import itertools
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -28,15 +16,7 @@ def convert2matrix(data_arr, look_back):
   Y.append(data_arr[d])
  return np.array(X), np.array(Y)
 
-def model_dnn(look_back):
-    model=Sequential()
-    model.add(Dense(units=32, input_dim=look_back, activation='sigmoid'))
-    model.add(Dense(8, activation='sigmoid'))
-    model.add(Dense(1))
-    model.compile(loss='mean_squared_error',  optimizer='adam',metrics = ['mse', 'mae'])
-    return model
-
- def model_loss(history):
+def model_loss(history):
     plt.figure(figsize=(8,4))
     plt.plot(history.history['loss'], label='Train Loss')
     plt.plot(history.history['val_loss'], label='Test Loss')
@@ -59,60 +39,50 @@ def prediction_plot(testY, test_predict):
   plt.show();
 
 
-#%% import data
-df = pd.read_excel("data/FinalData.xlsx")
-end_date = '2018-03-31'
-initial_date = '2018-01-01'
+#%% Data
+df = pd.read_excel("data/FinalDemand.xlsx")
 
-df1 = df[(df['Date'] <= end_date) & (df['Date'] >= initial_date)]
-#df2 = df[(df['Date'] <= end_date) & (df['Date'] >= initial_date)]
-df2 = df1['Actual']
-#%%
-#Split data set into testing dataset and train dataset
-train_size = 200
-train, test = df2.values[train_size:], df2.values[len(df2)-train_size: len(df2)]
-# setup look_back window
-look_back = 24
+#%% Splitting into training and testing
+
+split_cut = 21215 # It is 0.85 aprox
+train_set, test_set = df[0:split_cut-24], df[split_cut-24:len(df)]
+look_back = 24 #seasonality
 
 #%%
-scaler = MinMaxScaler(feature_range=(0, 1))#LTSM is senstive to the scale of features
-train_norm = scaler.fit_transform(np.reshape(train,(len(train),1)))
-test_norm = scaler.fit_transform(np.reshape(test,(len(test),1)))
+scaler = MinMaxScaler(feature_range=(0, 1))
+train_norm = scaler.fit_transform(np.reshape(train_set['Actual'].values,(len(train_set),1)))
+test_norm = scaler.fit_transform(np.reshape(test_set['Actual'].values,(len(test_set),1)))
 
 #%%
 #convert dataset into right shape in order to input into the DNN
-trainX, trainY = convert2matrix(train_norm, look_back)
-testX, testY = convert2matrix(test_norm, look_back)
+train_x, train_y = convert2matrix(train_norm, look_back)
+test_x, test_y = convert2matrix(test_norm, look_back)
 
 #%% reshaping
-trainX = np.reshape(trainX,(len(trainX),24))
-#trainY = np.reshape(trainY,(len(trainY),24))
-testX = np.reshape(testX,(len(testX),24))
-#testY = np.reshape(testY,(len(testY),24))
+train_x = np.reshape(train_x,(len(train_x),24))
+test_x = np.reshape(test_x,(len(test_x),24))
+
 
 #%%
-model=model_dnn(24)
-history=model.fit(trainX,trainY, epochs=70, batch_size=30, verbose=1)
+df_result = pd.DataFrame(test_set[24:768])
+n_epochs = [32, 64, 128]
+n_hidden = [32, 64, 128]
 
-#%% Prediction
+for i in n_hidden:
+    def model_dnn(look_back):
+        model = Sequential()
+        model.add(Dense(units=i, input_dim=look_back, activation='sigmoid'))
+        # model.add(Dense(8, activation='sigmoid'))
+        model.add(Dense(1))
+        model.compile(loss='mean_squared_error', optimizer='adam', metrics=['mse', 'mae'])
+        return model
+    for j in n_epochs:
+        model=model_dnn(24)
+        history=model.fit(train_x,train_y, epochs=j, verbose=0)
+        prediction = scaler.inverse_transform(model.predict(test_x[0:744]))
+        df_result[f'NN-{i,j}'] = prediction
 
-#predictions = model.predict(testX)
-plt.plot(testY)
-plt.plot(model.predict(testX))
-plt.show()
+
 
 #%%
-train_score = model.evaluate(trainX, trainY, verbose=0)
-print('Train Root Mean Squared Error(RMSE): %.2f; Train Mean Absolute Error(MAE) : %.2f '
-% (np.sqrt(train_score[1]), train_score[2]))
-test_score = model.evaluate(testX, testY, verbose=0)
-print('Test Root Mean Squared Error(RMSE): %.2f; Test Mean Absolute Error(MAE) : %.2f '
-% (np.sqrt(test_score[1]), test_score[2]))
-model_loss(history)
-
-#%%
-plt.plot(testY)
-plt.plot(model.predict(testX))
-plt.show()
-
-
+df_result.to_excel('NNResults.xlsx')
