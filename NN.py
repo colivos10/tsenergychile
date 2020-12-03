@@ -62,9 +62,8 @@ test_x, test_y = convert2matrix(test_norm, look_back)
 train_x = np.reshape(train_x,(len(train_x),24))
 test_x = np.reshape(test_x,(len(test_x),24))
 
-
 #%%
-df_result = pd.DataFrame(test_set[24:768])
+df_result = pd.DataFrame(test_set[24:192])
 n_epochs = [32, 64, 128]
 n_hidden = [32, 64, 128]
 
@@ -78,11 +77,9 @@ for i in n_hidden:
         return model
     for j in n_epochs:
         model=model_dnn(24)
-        history=model.fit(train_x,train_y, epochs=j, verbose=0)
-        prediction = scaler.inverse_transform(model.predict(test_x[0:744]))
+        history=model.fit(train_x,train_y, epochs=j, verbose=1)
+        prediction = scaler.inverse_transform(model.predict(train_x[21167-168:21167]))
         df_result[f'NN-{i,j}'] = prediction
 
-
-
-#%%
 df_result.to_excel('NNResults.xlsx')
+
